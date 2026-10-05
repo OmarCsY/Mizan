@@ -30,3 +30,5 @@ Other keys returned for en: `english_saheeh`, `english_hilali_khan`. Only one ke
 | `data/quran.json`, `quran_verses` | 6,236 verses, 114 surahs | 2026-10-05 | King Fahd Complex Hafs v3.0; 18,366 matching windows (1/2/3 verses) in memory |
 | `quran_translations` (`english_rwwad`, en) | 6,236 | 2026-10-05 | Arabic in QuranEnc matches our normalized Uthmani for 6,234 verses; 27:20 and 36:22 differ only in word joining (مالي / ما لي) |
 | `quran_translations` (`urdu_junagarhi`, ur) | 6,236 | 2026-10-05 | same |
+| `hadiths` (HadeethEnc, priority categories 3, 5, 121) | 2,646 | 2026-10-05 | creed (3), virtues & manners (5), fiqh of worship (121); 0 fetch failures |
+| `hadith_translations` ar / en / ur | 2,646 / 1,765 / 1,707 | 2026-10-05 | 881 hadiths are Arabic-only at the source (`translations: ["ar"]`); en/ur rows only where the source lists that translation. `--all` ingests the remaining root categories |

@@ -86,7 +86,7 @@ Depends on: B05
 Build: `sources/quranenc.py` client + `scripts/ingest_quranenc.py` for the pinned en and ur keys.
 AC: 6,236 rows per language in `quran_translations`; idempotent re-run inserts nothing new.
 
-### [ ] B07 · HadeethEnc ingest (P0)
+### [x] B07 · HadeethEnc ingest (P0)
 Depends on: B04, B02
 Build: `sources/hadeethenc.py` + `scripts/ingest_hadeethenc.py` (§6): categories → IDs (dedupe) → each hadith in
 ar, en, ur. Priority categories first; `--all` for the rest. Concurrency 4, backoff.
