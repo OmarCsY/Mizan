@@ -102,7 +102,7 @@ STATUS 2026-10-05: `scripts/embed_corpus.py` done (batches of 100, skips embedde
 (embed -> update -> `match_verse`) verified on local Postgres with a stub embedder (`tests/test_embed_corpus_live.py`).
 Not ticked until run with real `EMBEDDING_*` keys and the 3-query sanity check.
 
-### [ ] B09 · Dorar client (P0)
+### [x] B09 · Dorar client (P0)
 Depends on: B02, B04
 Build: `sources/dorar.py` (§4.1): call official API, parse `ahadith.result` HTML with BeautifulSoup into
 `DorarResult(id, text, text_clean, narrator, mohaddith, book, page, grade_text, url)`, stable IDs, cache in
