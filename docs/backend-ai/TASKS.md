@@ -70,7 +70,7 @@ STATUS 2026-10-05: code done; migration + /health + cleanup verified on a local 
 
 ## Phase B — Data
 
-### [ ] B05 · Mushaf ingest + in-memory index (P0)
+### [x] B05 · Mushaf ingest + in-memory index (P0)
 Depends on: B02, B04
 Build: `scripts/ingest_quran.py` (§6) from the King Fahd Complex data, or the QuranEnc `arabic_text` fallback
 if the Complex data is not downloadable without registration (record which in DECISIONS.md).

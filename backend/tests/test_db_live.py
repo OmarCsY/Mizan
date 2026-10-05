@@ -40,3 +40,14 @@ async def test_dorar_cache_roundtrip(pool) -> None:
     await queries.dorar_cache_put(h, "q", [{"id": "dorar:abc", "grade_text": "x"}])
     assert await queries.dorar_cache_get(h) == [{"id": "dorar:abc", "grade_text": "x"}]
     await pool.execute("delete from dorar_cache where query_hash = $1", h)
+
+
+async def test_quran_index_loads_from_db(pool) -> None:
+    from app.pipeline import quran_match
+
+    n = await pool.fetchval("select count(*) from quran_verses")
+    if n == 0:
+        pytest.skip("quran_verses empty: run python scripts/ingest_quran.py")
+    idx = await quran_match.load_from_db()
+    assert len(idx.verses) == 6236 and idx.verse(114, 6) is not None
+    assert idx.verse(2, 255).surah_name_en
