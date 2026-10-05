@@ -98,6 +98,9 @@ Depends on: B03, B06, B07
 Build: `scripts/embed_corpus.py` (§6), skip rows already embedded.
 AC: all `quran_translations` and `hadith_translations` rows embedded; `match_hadith` and `match_verse`
 return sensible top results for 3 queries built from ingested translations.
+STATUS 2026-10-05: `scripts/embed_corpus.py` done (batches of 100, skips embedded rows, resumable); SQL path
+(embed -> update -> `match_verse`) verified on local Postgres with a stub embedder (`tests/test_embed_corpus_live.py`).
+Not ticked until run with real `EMBEDDING_*` keys and the 3-query sanity check.
 
 ### [ ] B09 · Dorar client (P0)
 Depends on: B02, B04
