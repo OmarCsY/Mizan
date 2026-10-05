@@ -3,6 +3,7 @@
 Version 1.1 — 5 Oct 2026. Based on the team's technical spec v1.0 (`docs/reference/mizan-technical-spec.pdf`),
 with 13 review amendments merged. Every changed rule is marked `[AMENDMENT n]`; the full review is in
 `docs/backend-ai/AMENDMENTS.md`. Section numbers follow the original spec so the team can cross-reference.
+Later team decisions are marked `[DECISION D-n]` and logged in `docs/DECISIONS.md`.
 
 Building rule: **deterministic before LLM.** Anything an algorithm can decide (verse matching, grade
 classification, verdict decision, checking that a referenced item exists) is never left to the model.
@@ -76,7 +77,8 @@ locally (faster and more stable during judging). Dorar hadith search is called l
 
 | Source | Access | Used for | How |
 |---|---|---|---|
-| Mushaf text | King Fahd Complex developer data (`qurancomplex.gov.sa/quran-dev`), JSON/XML with verse IDs. **Fallback:** the `arabic_text` field returned by QuranEnc per verse (also from the Madinah Mushaf). | Deterministic matching (simplified imla'i form) and display (Uthmani) | Download once, load fully into memory at startup |
+| Mushaf text | King Fahd Complex developer data (`qurancomplex.gov.sa/quran-dev`), JSON/XML with verse IDs. **Fallback:** the `arabic_text` field returned by QuranEnc per verse (also from the Madinah Mushaf). | Display (Uthmani) and deterministic matching (normalized Uthmani form) | Download once, load fully into memory at startup |
+| Imla'i text `[DECISION D-3]` | In order: King Fahd Complex imla'i text if available; else quran.com API v4 `text_imlaei` / `text_imlaei_simple`; else Tanzil "simple". Must be 6,236 verses aligned 1:1 with the Uthmani source by (surah, ayah). | Deterministic matching only (modern spelling); never displayed | Download once, stored next to the Uthmani text |
 | QuranEnc | `GET /api/v1/translations/list/{lang}`, `GET /api/v1/translation/sura/{key}/{sura}`, `GET /api/v1/translation/aya/{key}/{sura}/{aya}` on `https://quranenc.com` | Approved English and Urdu translations + verse link | Pre-download 114 suras per language, then index |
 | HadeethEnc | `GET /api/v1/categories/list/?language=ar`, `GET /api/v1/hadeeths/list/?language=..&category_id=..&page=..&per_page=..`, `GET /api/v1/hadeeths/one/?id=..&language=..` on `https://hadeethenc.com` (and `/hadeeths/search/` if it exists — verify in smoke test) | Authentic hadiths with approved translations; cross-lingual matching; authentic alternatives | Pre-download ar, en, ur; embed |
 | Dorar hadith search | Official API `https://dorar.net/dorar_api.json?skey=<query>` (documented at `dorar.net/article/389`) | Scholars' gradings, sources, widespread-but-unestablished hadiths | Live call + `dorar_cache` |
@@ -128,7 +130,8 @@ create table quran_verses (
   surah         smallint not null,
   ayah          smallint not null,
   text_uthmani  text not null,            -- display
-  text_clean    text not null,            -- normalized imla'i, for matching
+  text_clean    text not null,            -- normalized Uthmani, for matching
+  text_imlaei_clean text not null,        -- [DECISION D-3] normalized imla'i, for matching
   unique (surah, ayah)
 );
 
@@ -261,8 +264,9 @@ def normalize_ar(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 ```
 
-Matching uses the simplified imla'i text, because people type verses in modern spelling. Display always uses
-the Uthmani text. Also add `tokens(s) -> list[str]` (split normalized text on spaces).
+`[DECISION D-3]` Matching runs against **both** the normalized Uthmani text and the normalized imla'i text and
+keeps the best score per verse, because people type verses in modern spelling and `normalize_ar` alone does not
+bridge Uthmani rasm (e.g. الصلوٰة → الصلوه). Display always uses the Uthmani text. Also add `tokens(s) -> list[str]` (split normalized text on spaces).
 
 ### 7.2 Extraction — `pipeline/extract.py` `[AMENDMENT 3, 7]`
 
@@ -330,6 +334,9 @@ and log them as hallucinations. Cap at 10 claims per message.
 
 ### 7.3 Verse matcher — `pipeline/quran_match.py` `[AMENDMENT 4]`
 
+`[DECISION D-4]` The verse matcher runs on **every Arabic claim**, whatever type the extractor gave it, so that
+`wrong_type` can fire both ways. Hadith retrieval runs for hadith claims and for quran claims with no verse match.
+
 At startup the whole Mushaf (6,236 verses) is loaded into memory, plus windows of 2 and 3 consecutive
 verses within the same surah to catch quotes spanning verses (~18.7k texts). Searching them with rapidfuzz
 takes milliseconds.
@@ -337,7 +344,9 @@ takes milliseconds.
 **Arabic quote algorithm**
 
 1. Normalize the quote. If it has fewer than 3 words and no explicit attribution, skip it (not judgeable),
-   return `not_found` with note `too_short`.
+   return `not_found` with note `too_short`. `[DECISION D-2]` If it has fewer than 3 words **and** cites a
+   surah/ayah: deterministic, no model call — if all its normalized words occur in the cited verse (either form),
+   `verified` at that location; otherwise `not_found` with note `too_short`.
 2. Get the top 10 candidates with `fuzz.partial_ratio`, adjusted by a mild length penalty:
    `adj = score * (0.85 + 0.15 * min(len_q, len_t) / max(len_q, len_t))`.
 3. **Containment guard:** if the quote is more than 30 % longer (in words) than a candidate text, that
@@ -358,6 +367,7 @@ takes milliseconds.
 |---|---|---|
 | ≥ 96 | none | `verified`, no LLM call |
 | ≥ 80 | some | candidate `misquoted`; the verifier (§7.5) confirms it is the same verse, not a similar one |
+| 80–95 | none | `[DECISION D-2]` send to the verifier (§7.5) |
 | < 80 | — | no verse match → try hadith retrieval (people often attribute hadith to the Quran); else `not_found` |
 
 7. **Multiple locations:** every distinct verse (not excluded by the containment guard) with raw score
@@ -553,6 +563,10 @@ Required unit tests (`tests/test_grades.py`), the strings are grading phrases, n
 Dorar returns the same matn through several chains and books. A weak grading of one chain is not a dispute
 about the hadith. Collect the gradings of **all** `match_ids` (plus `accepted` for a HadeethEnc match), then:
 
+`[DECISION D-1]` `unclassified` gradings are **neutral**: rows 1–6 are evaluated over the *classified*
+gradings only (ignoring `unclassified`), and row 7 applies only when **all** gradings are `unclassified`.
+So weak + unclassified → `not_established`; accepted_isnad + unclassified → `verified`.
+
 | # | Condition (first that holds) | Verdict |
 |---|---|---|
 | 1 | Any `accepted` from Sahih al-Bukhari, Sahih Muslim, or HadeethEnc | `verified` (other gradings shown under "takhrij details") |
@@ -561,7 +575,7 @@ about the hadith. Collect the gradings of **all** `match_ids` (plus `accepted` f
 | 4 | Only `accepted_isnad` (no weak/very_weak) | `verified` |
 | 5 | `accepted_isnad` together with `weak` or `very_weak` | `disputed` |
 | 6 | Non-empty and all `weak` / `very_weak` | `not_established` |
-| 7 | Only `unclassified` | `needs_review` (gradings shown verbatim, referral) |
+| 7 | All gradings `unclassified` | `needs_review` (gradings shown verbatim, referral) |
 
 Then apply the relation: if the verifier said `altered` and the verdict from the table is `verified`,
 the final verdict is `misquoted` (show diff + authentic wording). If `altered` and `not_established`,
@@ -589,10 +603,10 @@ Include at least 10 bench items of authentic hadiths that also have weak chains 
 
 | `status` | Condition | Response |
 |---|---|---|
-| `ok` | at least one claim processed | claims array |
+| `ok` | at least one claim processed and no personal-ruling request | claims array |
 | `no_claims` | intent `no_claims`, or no claims survived validation | Message from `core/messages.py`: Mizan verifies quoted verses and hadiths and found none; for general questions about Islam see byenah.com or islamhouse.com |
 | `evidence_request` | intent `evidence_request` and no claims | Explicitly refuses to produce evidence, explains Mizan verifies quotes rather than searching for proofs, refers to a specialist |
-| `referral` | `personal_ruling_request = true` | Explains Mizan is a source-verification tool, not a fatwa body; refers to a qualified authority. If the message also contains claims, they are still verified and `referral` is set alongside |
+| `referral` | `personal_ruling_request = true` (takes precedence over `ok`) | Explains Mizan is a source-verification tool, not a fatwa body; refers to a qualified authority. `[DECISION D-5]` If the message also contains claims, `status` is still `"referral"`: the claims are verified and returned in `claims`, and the `referral` object is set (as in `API_CONTRACT.md`) |
 
 Add 20 bench items taken from the reference pack's test questions (page 6) to cover these statuses.
 
