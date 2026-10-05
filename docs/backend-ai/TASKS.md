@@ -1,5 +1,32 @@
 # Backend + AI tasks
 
+## Resume here (2026-10-05, end of day)
+
+**Branch:** `be/free-tier-providers` holds everything (stacked on `be/B01-skeleton` … `be/B09-dorar-client`,
+all pushed; nothing merged to `main`). Tests: `pytest -q` → 74 passed / 9 skipped; with `--live` against a
+local Postgres → 82 passed.
+
+**Done:** B01, B02, B03, B05, B06, B07, B09 ticked. B04 and B08 code done, not ticked (need Supabase / a working
+embedding key). Free-tier switch (DECISIONS D-15–D-17): Gemini via its OpenAI-compatible endpoint + Groq quota fallback,
+provider per call in `check_metrics`, Gemini embeddings (1024 dims, L2-normalized, rate-limited, resumable),
+resumable/rate-limited `bench/run.py`, free-tier privacy notice. Extraction prompt + schema (§7.2) already in place.
+
+**Next:** B10 (extraction pipeline + rule detector, on top of `llm/prompts/extract.txt` and
+`models/extraction.py`), then B11 (verse matcher; must tolerate spelling variants, see D-13).
+
+**Needed from the human:**
+1. A Gemini key from an AI Studio project **without billing** (the current key returns HTTP 402 "prepayment
+   credits depleted" for every model and for embeddings). Put it in `LLM_API_KEY` and `EMBEDDING_API_KEY`, then run
+   `python scripts/pick_llm_model.py --write` and `pytest --live tests/test_extract_live.py` (from `backend/`).
+2. Optional: `GROQ_API_KEY` for the quota fallback.
+3. `DATABASE_URL`: switch port 6543 (transaction pooler) to 5432 (session pooler, D-7). Then:
+   `python scripts/migrate.py`, `ingest_quran.py`, `ingest_quranenc.py`, `ingest_hadeethenc.py`, `embed_corpus.py`.
+4. Decisions: D-10 (Mushaf license: OK to keep `data/quran.json` out of git?), D-11 (extra Sahihayn-filtered
+   Dorar query; needs SH sign-off), and how to merge the stacked branches (PRs or straight to `main`).
+5. Tell the frontend teammate: the About page should show `privacy` from `/api/v1/sources` (free-tier notice).
+
+---
+
 Work top to bottom. Each task lists what it depends on, what to build, and the acceptance criteria (AC)
 that must all pass before you tick it. `HUMAN` marks a step only the human can do (keys, accounts, sign-off);
 when you reach one, stop, print exactly what is needed, and continue with the next task that does not
