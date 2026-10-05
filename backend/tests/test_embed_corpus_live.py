@@ -65,3 +65,48 @@ async def test_embed_and_match_verse_roundtrip() -> None:
             await tr.rollback()
     finally:
         await conn.close()
+
+
+class QuotaAfterFirstBatch(StubEmbedder):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def embed_with_usage(self, texts: list[str], input_type: str = "document") -> Res:
+        from app.llm.embeddings import EmbeddingRateLimited
+
+        self.calls += 1
+        if self.calls > 1:
+            raise EmbeddingRateLimited(60, daily=True)
+        return await super().embed_with_usage(texts, input_type)
+
+
+async def test_daily_quota_stops_and_next_run_resumes() -> None:
+    dsn = get_settings().database_url
+    if not dsn:
+        pytest.skip("DATABASE_URL not set")
+    conn = await asyncpg.connect(dsn)
+    try:
+        if not await conn.fetchval("select count(*) from quran_translations"):
+            pytest.skip("quran_translations empty")
+        tr = conn.transaction()
+        await tr.start()
+        try:
+            before = await conn.fetchval("select count(*) from quran_translations where embedding is null")
+            with pytest.raises(embed_corpus.QuotaStop):
+                await embed_corpus.embed_table(conn, QuotaAfterFirstBatch(), "quran_translations", batch=50, limit=200)
+            after_stop = await conn.fetchval("select count(*) from quran_translations where embedding is null")
+            assert before - after_stop == 50  # first batch kept
+            first_missing = await conn.fetchval(
+                "select min(verse_id) from quran_translations where embedding is null and tr_key = 'english_rwwad'"
+            )
+            n, _ = await embed_corpus.embed_table(conn, StubEmbedder(), "quran_translations", batch=50, limit=50)
+            assert n == 50
+            # resumed at the first row without an embedding, not from the start
+            assert await conn.fetchval(
+                "select embedding is not null from quran_translations where verse_id = $1 and tr_key = 'english_rwwad'",
+                first_missing,
+            )
+        finally:
+            await tr.rollback()
+    finally:
+        await conn.close()

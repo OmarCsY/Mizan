@@ -10,7 +10,13 @@ Providers:
   models reject sampling parameters, so temperature is not sent (DECISIONS D-12); determinism comes from
   the schema constraint and a fixed low effort.
 - `openai_compatible`: `POST {LLM_BASE_URL}/chat/completions`, `temperature=0`,
-  `response_format={"type": "json_object"}`, schema appended to the system prompt.
+  `response_format={"type": "json_object"}`, schema appended to the system prompt. Used for Gemini's
+  OpenAI-compatible endpoint (free tier, DECISIONS D-15).
+
+Quota fallback (D-15): if the primary answers with a quota / rate-limit error (HTTP 429, or 402 /
+`RESOURCE_EXHAUSTED`), the call is retried once on Groq (`GROQ_API_KEY`, `GROQ_MODEL`) when a Groq key is
+set; otherwise `LLMQuotaExceeded` is raised. `LLMUsage.providers` counts which provider served each call,
+for `check_metrics.llm_providers`.
 """
 
 from __future__ import annotations
@@ -60,19 +66,44 @@ class LLMRefusal(LLMError):
     pass
 
 
+class LLMQuotaExceeded(LLMError):
+    """Primary provider out of quota / rate-limited and no fallback could serve the call."""
+
+
 class LLMUsage(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
+    providers: dict[str, int] = {}  # provider label -> number of calls it served
 
     def __add__(self, other: LLMUsage) -> LLMUsage:
+        providers = dict(self.providers)
+        for k, v in other.providers.items():
+            providers[k] = providers.get(k, 0) + v
         return LLMUsage(
             input_tokens=self.input_tokens + other.input_tokens,
             output_tokens=self.output_tokens + other.output_tokens,
+            providers=providers,
         )
 
 
 class _Transient(Exception):
-    """Retryable provider failure (timeout, connection error, 429, 5xx)."""
+    """Retryable provider failure (timeout, connection error, 5xx)."""
+
+
+class _Quota(Exception):
+    """Quota or rate-limit error (429, 402, RESOURCE_EXHAUSTED): not retried on the same provider."""
+
+
+def provider_label(base_url: str) -> str:
+    if "generativelanguage.googleapis.com" in base_url:
+        return "gemini"
+    if "api.groq.com" in base_url:
+        return "groq"
+    return "openai_compatible"
+
+
+def _is_quota_error(status: int, body_text: str) -> bool:
+    return status in (402, 429) or "RESOURCE_EXHAUSTED" in body_text
 
 
 # --------------------------------------------------------------------------- prompts
@@ -170,12 +201,14 @@ class LLMClient:
         except (anthropic.APITimeoutError, anthropic.APIConnectionError) as e:
             raise _Transient(type(e).__name__) from e
         except anthropic.RateLimitError as e:
-            raise _Transient("rate_limited") from e
+            raise _Quota("rate_limited") from e
         except anthropic.APIStatusError as e:
             if e.status_code >= 500:
                 raise _Transient(f"http_{e.status_code}") from e
             raise LLMError(f"anthropic http {e.status_code}") from e
-        usage = LLMUsage(input_tokens=resp.usage.input_tokens, output_tokens=resp.usage.output_tokens)
+        usage = LLMUsage(
+            input_tokens=resp.usage.input_tokens, output_tokens=resp.usage.output_tokens, providers={"anthropic": 1}
+        )
         if resp.stop_reason == "refusal":
             raise LLMRefusal("model refused")
         text = next((b.text for b in resp.content if b.type == "text"), "")
@@ -184,26 +217,36 @@ class LLMClient:
         return text, usage
 
     async def _call_openai_compatible(
-        self, system: str, user: str, schema_json: dict[str, Any], model: str
+        self,
+        system: str,
+        user: str,
+        schema_json: dict[str, Any],
+        model: str,
+        *,
+        base_url: str,
+        api_key: str,
+        reasoning_effort: str = "",
     ) -> tuple[str, LLMUsage]:
         s = self.settings
         system_full = (
             f"{system}\n\nReturn a single JSON object that validates against this JSON schema:\n"
             f"{json.dumps(schema_json, ensure_ascii=False)}"
         )
-        payload = {
+        payload: dict[str, Any] = {
             "model": model,
             "temperature": 0,
             "max_tokens": s.llm_max_tokens,
             "response_format": {"type": "json_object"},
             "messages": [{"role": "system", "content": system_full}, {"role": "user", "content": user}],
         }
+        if reasoning_effort:
+            payload["reasoning_effort"] = reasoning_effort
         client = self._http_client or httpx.AsyncClient()
         try:
             r = await client.post(
-                s.llm_base_url.rstrip("/") + "/chat/completions",
+                base_url.rstrip("/") + "/chat/completions",
                 json=payload,
-                headers={"Authorization": f"Bearer {s.llm_api_key}"},
+                headers={"Authorization": f"Bearer {api_key}"},
                 timeout=s.llm_timeout_s,
             )
         except (httpx.TimeoutException, httpx.TransportError) as e:
@@ -211,27 +254,56 @@ class LLMClient:
         finally:
             if self._http_client is None:
                 await client.aclose()
-        if r.status_code == 429 or r.status_code >= 500:
+        if _is_quota_error(r.status_code, r.text):
+            raise _Quota(f"http_{r.status_code}")
+        if r.status_code >= 500:
             raise _Transient(f"http_{r.status_code}")
         if r.status_code >= 400:
-            raise LLMError(f"openai_compatible http {r.status_code}")
+            raise LLMError(f"{provider_label(base_url)} http {r.status_code}")
         body = r.json()
         u = body.get("usage") or {}
-        usage = LLMUsage(input_tokens=u.get("prompt_tokens", 0), output_tokens=u.get("completion_tokens", 0))
+        usage = LLMUsage(
+            input_tokens=u.get("prompt_tokens", 0),
+            output_tokens=u.get("completion_tokens", 0),
+            providers={provider_label(base_url): 1},
+        )
         return body["choices"][0]["message"]["content"] or "", usage
 
+    async def _call_primary(self, system: str, user: str, schema_json: dict[str, Any], model: str) -> tuple[str, LLMUsage]:
+        s = self.settings
+        if s.llm_provider == "anthropic":
+            return await self._call_anthropic(system, user, schema_json, model)
+        if s.llm_provider == "openai_compatible":
+            return await self._call_openai_compatible(
+                system, user, schema_json, model,
+                base_url=s.llm_base_url, api_key=s.llm_api_key, reasoning_effort=s.llm_reasoning_effort,
+            )
+        raise LLMError("LLM_PROVIDER is not set")
+
+    async def _call_groq(self, system: str, user: str, schema_json: dict[str, Any]) -> tuple[str, LLMUsage]:
+        s = self.settings
+        return await self._call_openai_compatible(
+            system, user, schema_json, s.groq_model,
+            base_url=s.groq_base_url, api_key=s.groq_api_key, reasoning_effort=s.groq_reasoning_effort,
+        )
+
     async def _call_once(self, system: str, user: str, schema_json: dict[str, Any], model: str) -> tuple[str, LLMUsage]:
-        provider = self.settings.llm_provider
-        if provider == "anthropic":
-            call = self._call_anthropic
-        elif provider == "openai_compatible":
-            call = self._call_openai_compatible
-        else:
-            raise LLMError("LLM_PROVIDER is not set")
         try:
-            return await with_retry(lambda: call(system, user, schema_json, model), retry_on=(_Transient,))
+            return await with_retry(
+                lambda: self._call_primary(system, user, schema_json, model), retry_on=(_Transient,)
+            )
         except _Transient as e:
             raise LLMTimeout(str(e)) from e
+        except _Quota as e:
+            if not self.settings.groq_api_key:
+                raise LLMQuotaExceeded(f"primary: {e}; no GROQ_API_KEY") from e
+            log.warning("llm_quota_fallback", extra={"from": self.settings.llm_provider, "to": "groq", "error": str(e)})
+        try:  # one retry on Groq
+            return await self._call_groq(system, user, schema_json)
+        except _Transient as e:
+            raise LLMTimeout(f"groq: {e}") from e
+        except _Quota as e:
+            raise LLMQuotaExceeded(f"groq: {e}") from e
 
     # -- public
 
@@ -258,6 +330,7 @@ class LLMClient:
                         "latency_ms": int((time.perf_counter() - t0) * 1000),
                         "tokens_in": usage.input_tokens,
                         "tokens_out": usage.output_tokens,
+                        "providers": usage.providers,
                     },
                 )
                 return parsed, usage

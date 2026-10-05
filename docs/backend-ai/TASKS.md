@@ -53,6 +53,8 @@ AC:
 - Unit tests with mocked HTTP (respx) for: valid JSON, invalid-then-valid JSON (retry), timeout.
 - Switching provider is env-only.
 HUMAN: choose providers and set `LLM_*` and `EMBEDDING_*` keys in `.env`.
+UPDATE 2026-10-05 (D-15, D-16): free tiers. Gemini (OpenAI-compatible) + Groq quota fallback, `gemini`
+embedding provider with L2 normalization and client-side rate limits; provider per call in `check_metrics`.
 
 ### [ ] B04 · Database + migration (P0)
 Depends on: B01
@@ -207,6 +209,8 @@ Depends on: B16, B18
 Build: `bench/run.py` (systems `mizan`, `llm_baseline`, `dorar_direct`; `--runs`; saves raw outputs to
 `bench/results/<system>-<split>-<run>.jsonl`), `bench/metrics.py` (all metrics in §11.3, hallucination per §11.4,
 tables + PNG charts, `report.md`), `bench/prices.json`.
+Runner harness already resumable and rate-limited (D-17): build the `llm_baseline` and `dorar_direct`
+systems inside `bench/run.py`.
 AC:
 - `llm_baseline` uses the forced structured output in §11.4.
 - Report shows per-category and per-language accuracy, not-established recall, false-verified rate, hallucination

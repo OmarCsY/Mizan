@@ -170,3 +170,67 @@ def test_schema_cleaning_drops_unsupported_constraints() -> None:
 
     js = json_schema_for(S)
     assert "maxItems" not in js["properties"]["xs"] and js["additionalProperties"] is False
+
+
+# ----------------------------------------------------------------------------- quota fallback (D-15)
+
+GEMINI = "https://generativelanguage.googleapis.com/v1beta/openai"
+GROQ = "https://api.groq.com/openai/v1"
+
+
+def gemini_settings(groq_key: str = "groq-key") -> Settings:
+    return Settings(
+        _env_file=None, llm_provider="openai_compatible", llm_api_key="g", llm_base_url=GEMINI + "/",
+        groq_api_key=groq_key, llm_timeout_s=1.0,
+    )
+
+
+@pytest.mark.parametrize("status", [429, 402])
+@respx.mock
+async def test_quota_error_falls_back_to_groq_once(status: int) -> None:
+    primary = respx.post(GEMINI + "/chat/completions").mock(
+        return_value=httpx.Response(status, json={"error": {"status": "RESOURCE_EXHAUSTED"}})
+    )
+    groq = respx.post(GROQ + "/chat/completions").mock(
+        return_value=httpx.Response(200, json=oa_body('{"answer": "g", "score": 1}'))
+    )
+    out, usage = await LLMClient(gemini_settings()).complete_json("echo", {"text": "hi"}, Echo, "gemini-x")
+    assert out.answer == "g"
+    assert primary.call_count == 1  # quota errors are not retried on the same provider
+    assert groq.call_count == 1
+    body = json.loads(groq.calls[0].request.content)
+    assert body["model"] == "openai/gpt-oss-120b" and body["reasoning_effort"] == "low"
+    assert groq.calls[0].request.headers["Authorization"] == "Bearer groq-key"
+    assert usage.providers == {"groq": 1}
+
+
+@respx.mock
+async def test_quota_without_groq_key_raises() -> None:
+    from app.llm.client import LLMQuotaExceeded
+
+    respx.post(GEMINI + "/chat/completions").mock(return_value=httpx.Response(429, json={}))
+    with pytest.raises(LLMQuotaExceeded):
+        await LLMClient(gemini_settings(groq_key="")).complete_json("echo", {"text": "hi"}, Echo, "gemini-x")
+
+
+@respx.mock
+async def test_groq_also_out_of_quota_raises() -> None:
+    from app.llm.client import LLMQuotaExceeded
+
+    respx.post(GEMINI + "/chat/completions").mock(return_value=httpx.Response(429, json={}))
+    groq = respx.post(GROQ + "/chat/completions").mock(return_value=httpx.Response(429, json={}))
+    with pytest.raises(LLMQuotaExceeded):
+        await LLMClient(gemini_settings()).complete_json("echo", {"text": "hi"}, Echo, "gemini-x")
+    assert groq.call_count == 1
+
+
+@respx.mock
+async def test_primary_success_is_labelled_gemini() -> None:
+    respx.post(GEMINI + "/chat/completions").mock(
+        side_effect=[
+            httpx.Response(200, json=oa_body("bad")),
+            httpx.Response(200, json=oa_body('{"answer": "a", "score": 0}')),
+        ]
+    )
+    _, usage = await LLMClient(gemini_settings()).complete_json("echo", {"text": "hi"}, Echo, "gemini-x")
+    assert usage.providers == {"gemini": 2}  # both attempts counted

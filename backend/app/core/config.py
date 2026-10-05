@@ -38,14 +38,24 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 4096
     llm_effort: str = "low"  # anthropic output_config.effort; empty = omit (e.g. Haiku 4.5)
     llm_anthropic_fallbacks: bool = True  # server-side refusal fallback on models that support it
+    llm_reasoning_effort: str = ""  # openai_compatible `reasoning_effort` (e.g. Gemini: none|low|medium|high)
+
+    # Fallback LLM on quota / rate-limit errors from the primary (DECISIONS D-15)
+    groq_api_key: str = ""
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_reasoning_effort: str = "low"
 
     # Embeddings
-    embedding_provider: Literal["openai_compatible", "cohere", "voyage", ""] = ""
+    embedding_provider: Literal["gemini", "openai_compatible", "cohere", "voyage", ""] = ""
     embedding_api_key: str = ""
     embedding_base_url: str = ""
     embedding_model: str = ""
     embedding_dim: int = 1024
     embedding_batch_size: int = 100
+    # Client-side rate limits for free tiers (0 = unlimited). Counted per text embedded / per call.
+    embedding_rpm: int = 0
+    embedding_tpm: int = 0
 
     # Sources
     quranenc_base_url: str = "https://quranenc.com"

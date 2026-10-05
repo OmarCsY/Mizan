@@ -51,3 +51,14 @@ async def test_quran_index_loads_from_db(pool) -> None:
     idx = await quran_match.load_from_db()
     assert len(idx.verses) == 6236 and idx.verse(114, 6) is not None
     assert idx.verse(2, 255).surah_name_en
+
+
+async def test_check_metrics_records_providers(pool) -> None:
+    cid = uuid.uuid4().hex
+    await queries.insert_check_metrics(
+        check_id=cid, channel="web", lang="en", n_claims=2, status="ok", latency_ms=1234,
+        llm_tokens_in=100, llm_tokens_out=20, embed_tokens=7, llm_providers={"gemini": 2, "groq": 1},
+    )
+    row = await pool.fetchrow("select llm_providers, n_claims from check_metrics where check_id = $1", cid)
+    assert row["llm_providers"] == {"gemini": 2, "groq": 1} and row["n_claims"] == 2
+    await pool.execute("delete from check_metrics where check_id = $1", cid)

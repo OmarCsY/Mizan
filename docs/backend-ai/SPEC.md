@@ -822,6 +822,11 @@ MAX_INPUT_CHARS=4000
 RESULT_TTL_HOURS=24
 ```
 
+`[DECISION D-15, D-16]` Free tiers only: LLM = Gemini via its OpenAI-compatible endpoint with a one-shot
+Groq fallback on quota errors; embeddings = `gemini` provider (`gemini-embedding-001`, 1024 dims,
+L2-normalized, RETRIEVAL_DOCUMENT / RETRIEVAL_QUERY). Extra env: `GROQ_API_KEY`, `GROQ_MODEL`,
+`LLM_REASONING_EFFORT`, `EMBEDDING_RPM`, `EMBEDDING_TPM` (see `.env.example`).
+
 Embedding model: must be multilingual (Arabic, English, Urdu) and return 1024 dims (HNSW in pgvector supports
 up to 2,000 dims; we fix 1024). Use any provider that supports Arabic and Urdu well and either natively
 outputs 1024 dims or accepts a `dimensions` parameter. The human chooses the provider and gives the key.
