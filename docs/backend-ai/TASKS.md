@@ -81,7 +81,7 @@ AC:
 - `tests/test_normalize.py`: tashkeel, tatweel, hamza forms, ta marbuta, alif maqsura, punctuation/digits removal.
 - Startup loads the index in < 3 s and memory stays < 300 MB.
 
-### [ ] B06 · QuranEnc translations ingest (P0)
+### [x] B06 · QuranEnc translations ingest (P0)
 Depends on: B05
 Build: `sources/quranenc.py` client + `scripts/ingest_quranenc.py` for the pinned en and ur keys.
 AC: 6,236 rows per language in `quran_translations`; idempotent re-run inserts nothing new.

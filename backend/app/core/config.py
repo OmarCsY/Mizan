@@ -49,8 +49,8 @@ class Settings(BaseSettings):
 
     # Sources
     quranenc_base_url: str = "https://quranenc.com"
-    quranenc_key_en: str = ""
-    quranenc_key_ur: str = ""
+    quranenc_key_en: str = "english_rwwad"  # pinned in B02, docs/SOURCES.md
+    quranenc_key_ur: str = "urdu_junagarhi"
     hadeethenc_base_url: str = "https://hadeethenc.com"
     dorar_base_url: str = "https://dorar.net"
     external_timeout_s: float = 8.0
