@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Mizan
+data/raw/
+bench/results/*.jsonl
+.claude/

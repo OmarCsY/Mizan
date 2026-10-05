@@ -13,7 +13,7 @@ Legend: P0 = must ship · P1 = should ship · P2 = if time allows.
 
 ## Phase A — Foundations
 
-### [ ] B01 · Repo skeleton (P0)
+### [x] B01 · Repo skeleton (P0)
 Depends on: —
 Build:
 - Layout from §15 (`backend/`, `bot/`, `scripts/`, `bench/`, `docs/`; leave `frontend/` alone).
