@@ -63,6 +63,8 @@ AC:
 - Migration applies cleanly on a fresh Supabase project.
 - `/health` returns 503 when DB is unreachable, 200 otherwise.
 HUMAN: create the Supabase project, enable `vector`, give `DATABASE_URL`.
+STATUS 2026-10-05: code done; migration + /health + cleanup verified on a local Postgres 16 + pgvector 0.8.1
+(`pytest --live`). Not ticked until the migration is applied to the Supabase project (needs `DATABASE_URL`).
 
 ---
 
