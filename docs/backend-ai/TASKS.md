@@ -42,7 +42,7 @@ AC:
   and `docs/SOURCES.md` (§4.2).
 HUMAN: none, unless a source needs a key or blocks the request.
 
-### [ ] B03 · LLM + embeddings clients (P0)
+### [x] B03 · LLM + embeddings clients (P0)
 Depends on: B01
 Build: `llm/client.py` with `async complete_json(prompt_name, variables, schema: type[BaseModel], model) -> (BaseModel, usage)`:
 loads `prompts/<name>.txt`, fills variables, calls the provider chosen by `LLM_PROVIDER`

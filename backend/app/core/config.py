@@ -35,7 +35,9 @@ class Settings(BaseSettings):
     llm_model_verify: str = ""
     llm_model_reply: str = ""
     llm_timeout_s: float = 8.0
-    llm_max_tokens: int = 2048
+    llm_max_tokens: int = 4096
+    llm_effort: str = "low"  # anthropic output_config.effort; empty = omit (e.g. Haiku 4.5)
+    llm_anthropic_fallbacks: bool = True  # server-side refusal fallback on models that support it
 
     # Embeddings
     embedding_provider: Literal["openai_compatible", "cohere", "voyage", ""] = ""
