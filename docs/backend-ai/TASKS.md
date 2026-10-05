@@ -28,7 +28,7 @@ AC:
 - `pytest -q` runs (zero tests is fine).
 - No secret values anywhere in the repo.
 
-### [ ] B02 · Source smoke test + fixtures (P0)
+### [x] B02 · Source smoke test + fixtures (P0)
 Depends on: B01
 Build: `scripts/smoke_sources.py` (§4.3): one real request each to QuranEnc (list + one sura), HadeethEnc
 (categories, list, one, search if it exists), Dorar (`dorar_api.json?skey=` with a common Arabic phrase taken

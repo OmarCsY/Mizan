@@ -221,5 +221,6 @@ __marimo__/
 
 # Mizan
 data/raw/
+data/quran.json
 bench/results/*.jsonl
 .claude/
