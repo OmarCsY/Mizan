@@ -1,0 +1,474 @@
+{
+  "name": "Mizan — Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "b0bcd25d-bd94-45fe-b2cb-1345f6d412ef",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -832,
+        304
+      ],
+      "webhookId": "f6c6a4b7-55c6-4245-846c-44a2b4ecfb48",
+      "credentials": {
+        "telegramApi": {
+          "id": "noRlITVXTBecURvI",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare incoming Telegram text for the Mizan backend.\nfunction prepareUpdate(update, config) {\n  const message = update?.message;\n  if (!message || message.from?.is_bot || !Number.isSafeInteger(message.chat?.id)) return null;\n  const text = typeof message.text === 'string' ? message.text : typeof message.caption === 'string' ? message.caption : '';\n  const context = {chat_id:String(message.chat.id),message_id:message.message_id,text,config,should_check:false,service_text:''};\n  const command = text.trim().split(/\\s/)[0].split('@')[0];\n  if (['/start','/help'].includes(command)) context.service_text = 'مرحبًا بك في ميزان. أرسل نصًا يحتوي على آية أو حديث للتحقق من مصادره. أداة آلية وليست فتوى.';\n  else if (!text.trim()) context.service_text = 'أرسل نصًا أو صورة / فيديو مع وصف يحتوي على الاقتباس. لا تدعم هذه النسخة قراءة النص داخل الصور أو التسجيلات الصوتية.';\n  else if (Array.from(text).length > 4000) context.service_text = 'النص طويل. اختصره إلى 4000 حرف ثم أرسله مجددًا.';\n  else context.should_check = true;\n  return context;\n}\nconst config={demo:false,backend_url:'https://mizan-backend-d4t5.onrender.com',website_url:''};\nconst context=prepareUpdate($input.first().json,config); return context ? [{json:context}] : [];"
+      },
+      "id": "2e374f3a-8b5c-450f-9535-676638b7953e",
+      "name": "Prepare message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -592,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "bbb41a25-0195-48c0-94a8-75885d2458e9",
+              "leftValue": "={{ $json.should_check }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "41f971fa-5a49-4838-9c3c-2a823c0ff41c",
+      "name": "Needs verification",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -352,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.service_text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "3f272c68-d1f0-400a-9d25-0f5472402404",
+      "name": "Service reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -128,
+        560
+      ],
+      "webhookId": "585ec59b-e7e4-4810-a781-8a75906ff216",
+      "credentials": {
+        "telegramApi": {
+          "id": "noRlITVXTBecURvI",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Prepare message').first().json.chat_id }}",
+        "text": "⏳ جارٍ التحقق من الاقتباسات…",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "c64a6879-9a00-45df-87ab-89fb940c0bed",
+      "name": "Send loading",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -128,
+        224
+      ],
+      "webhookId": "3ed8ca7e-8dd2-4b94-8576-3b1949623175",
+      "credentials": {
+        "telegramApi": {
+          "id": "noRlITVXTBecURvI",
+          "name": "Telegram account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f4a33268-25e9-4164-a606-4da9cdf23aaa",
+              "leftValue": "={{ $('Prepare message').first().json.config.demo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e1f70e68-d769-4cfb-aed2-00787dd6c0f4",
+      "name": "Demo mode",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        112,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fixtures = {\"dorar\":{\"text_arabic\":\"اطلُبُوا العِلْمَ ولو بالصِّينِ\",\"source\":\"dorar\",\"url\":\"https://dorar.net/h/Yx6dE0Zf\",\"gradings\":[{\"mohaddith\":\"الألباني\",\"book\":\"السلسلة الضعيفة\",\"page\":\"416\",\"grade_text\":\"باطل\",\"grade_class\":\"very_weak\"}],\"provenance\":\"Source page retrieved for frontend fixture authoring, 2026-10-05. Demo verdict is a fixed API fixture, not a frontend authenticity decision.\"},\"hadith-ar\":{\"id\":\"6267\",\"title\":\"من سلك طريقًا يبتغي فيه علمًا سهل الله له طريقًا إلى الجنة\",\"attribution\":\"رواه أبو داود والترمذي وابن ماجه والدارمي وأحمد\",\"grade\":\"حسن\",\"url\":\"https://hadeethenc.com/ar/browse/hadith/6267\",\"fetched_from\":\"https://hadeethenc.com/api/v1/hadeeths/one/?language=ar&id=6267\",\"fetched_at\":\"2026-10-05T18:50:36.395Z\"},\"hadith-en\":{\"id\":\"6267\",\"title\":\"Whoever follows a path in pursuit of knowledge, Allah will facilitate for him a path to Paradise\",\"attribution\":\"Narrated by Ibn Majah - Narrated by At-Termedhy - Narrated by Abu Daoud - Narrated by Ahmad - Ad-Daarimi\",\"grade\":\"Good hadith\",\"url\":\"https://hadeethenc.com/en/browse/hadith/6267\",\"fetched_from\":\"https://hadeethenc.com/api/v1/hadeeths/one/?language=en&id=6267\",\"fetched_at\":\"2026-10-05T18:50:36.644Z\"},\"hadith-ur\":{\"id\":\"6267\",\"title\":\"جو شخص علم کی تلاش میں کسی راہ پر چل پڑے، اللہ تعالیٰ اس کے لیے جنت کی راہ آسان فرما دیتا ہے\",\"attribution\":\"اسے ابنِ ماجہ نے روایت کیا ہے۔ - اسے امام ترمذی نے روایت کیا ہے۔ - اسے امام ابو داؤد نے روایت کیا ہے۔ - اسے امام احمد نے روایت کیا ہے۔ - اسے امام دارمی نے روایت کیا ہے۔\",\"grade\":\"حَسَنْ\",\"url\":\"https://hadeethenc.com/ur/browse/hadith/6267\",\"fetched_from\":\"https://hadeethenc.com/api/v1/hadeeths/one/?language=ur&id=6267\",\"fetched_at\":\"2026-10-05T18:50:36.896Z\"},\"quran\":{\"id\":\"6095\",\"sura\":\"94\",\"aya\":\"5\",\"arabic_text\":\"فَإِنَّ مَعَ ٱلۡعُسۡرِ يُسۡرًا\",\"translation\":\"For indeed, with hardship [will be] ease [i.e., relief].\",\"footnotes\":\"\",\"url\":\"https://quranenc.com/en/browse/english_saheeh/94#5\",\"fetched_from\":\"https://quranenc.com/api/v1/translation/aya/english_saheeh/94/5\",\"fetched_at\":\"2026-10-05T18:50:37.711Z\"}};\nconst ctx = $('Prepare message').first().json;\nconst text = ctx.text.trim();\nlet result = {status:'demo_unsupported'};\nconst ar=fixtures['hadith-ar'];\nif (['اطلبوا العلم ولو بالصين','قال رسول الله ﷺ: اطلبوا العلم ولو بالصين', fixtures.dorar.text_arabic].includes(text)) result={check_id:'demo-china',status:'ok',claims:[{index:0,type:'hadith',span:text,verdict:'not_established',source_status:'ok',evidence:fixtures.dorar,alternative:{source:'hadeethenc',text_arabic:ar.title,attribution:ar.attribution,url:ar.url}}]};\nfor(const lang of ['ar','en','ur']) if(text===fixtures['hadith-'+lang].title) result={check_id:'demo-'+lang,status:'ok',claims:[{index:0,type:'hadith',span:text,verdict:'verified',relation:'same_meaning',source_status:'ok',evidence:{source:'hadeethenc',text_arabic:ar.title,translation:lang==='ar'?null:text,url:fixtures['hadith-'+lang].url,gradings:[{grade_text:ar.grade}]}}]};\nif(text===fixtures.quran.arabic_text) result={check_id:'demo-quran',status:'ok',claims:[{index:0,type:'quran',span:text,verdict:'verified',source_status:'ok',evidence:{source:'quran',text_arabic:text,url:fixtures.quran.url,locations:[{surah:94,ayah:5}]}}]};\nreturn [{json:result}];"
+      },
+      "id": "24dd54c9-1847-4da1-9aca-17aa2d8b0ff2",
+      "name": "Demo result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare message').first().json.config.backend_url.replace(/\\/$/, '') + '/api/v1/check' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({text: $('Prepare message').first().json.text,channel:'telegram',lang_hint:null}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "60bac019-cbe4-4f3a-b432-a66a62d145d6",
+      "name": "Mizan API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        336,
+        368
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transport and presentation only. Verdicts and source data come from Mizan.\nconst LIMIT = 3900;\nfunction escapeHtml(value) {\n  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\n}\nfunction sourceLink(url, label = 'عرض المصدر') {\n  if (typeof url !== 'string' || url.includes(String.fromCharCode(92)) || !/^https:\\/\\/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?::\\d{1,5})?(?:[/?#][^\\s<>\"]*)?$/i.test(url)) return ''; return `<a href=\"${escapeHtml(url)}\">${escapeHtml(label)}</a>`;\n}\nfunction prepareUpdate(update, config) {\n  const message = update?.message;\n  if (!message || message.from?.is_bot || !Number.isSafeInteger(message.chat?.id)) return null;\n  const text = typeof message.text === 'string' ? message.text : typeof message.caption === 'string' ? message.caption : '';\n  const context = { chat_id: String(message.chat.id), message_id: message.message_id, text, config, should_check: false, service_text: '' };\n  const command = text.trim().split(/\\s/)[0].split('@')[0];\n  if (['/start', '/help'].includes(command)) context.service_text = `مرحبًا بك في مِيزان. أرسل نصًا يحتوي على آية أو حديث، أو أعد توجيه رسالة مع وصفها.\\nأداة للتحقق من المصادر، وليست فتوى.${config.demo ? '\\n\\nنسخة تجريبية: جرّب النص: اطلبوا العلم ولو بالصين\\nالنتائج أمثلة ثابتة وليست تحققًا مباشرًا.' : ''}`;\n  else if (!text.trim()) context.service_text = 'أرسل نصًا أو صورة / فيديو مع وصف يحتوي على الاقتباس. لا تدعم هذه النسخة قراءة النص داخل الصور أو التسجيلات الصوتية.';\n  else if (Array.from(text).length > 4000) context.service_text = 'النص طويل. اختصره إلى 4000 حرف ثم أرسله مجددًا.';\n  else if (!config.demo && !/^https:\\/\\//.test(config.backend_url || '')) context.service_text = 'خدمة التحقق لم تُربط بعد. حاول لاحقًا.';\n  else context.should_check = true;\n  return context;\n}\nfunction apiRequest(context) { return { text: context.text, channel: 'telegram', lang_hint: null }; }\nfunction errorText(status) {\n  return ({ 413: 'النص طويل. اختصره إلى 4000 حرف.', 422: 'تعذر قراءة الطلب. حاول إرسال النص مجددًا.', 429: 'وصلت إلى حد الطلبات مؤقتًا. انتظر قليلًا ثم أرسل النص مجددًا.', 503: 'خدمة التحقق غير متاحة الآن. حاول لاحقًا.' })[status] || 'تعذر إكمال التحقق الآن. حاول مرة أخرى بعد قليل.';\n}\nfunction claimBlock(claim) {\n  if (!claim || typeof claim.span !== 'string') throw new Error('Invalid claim');\n  const verdicts = { verified: '✓ موثّق', misquoted: '⚠ منقول بخطأ', not_established: '✕ لا يثبت', disputed: '⚖ اختلف المحدثون', not_found: '? لم يُعثر عليه', needs_review: '? يحتاج مراجعة مختص' };\n  const lines = [`<b>${claim.source_status === 'source_unavailable' ? '! تعذر الوصول للمصدر' : verdicts[claim.verdict] || verdicts.needs_review}</b>`, `«${escapeHtml(claim.span)}»`];\n  if (claim.source_status === 'source_unavailable') lines.push('المصدر لم يستجب. أعد المحاولة؛ هذا لا يعني عدم وجود الاقتباس.');\n  else if (claim.verdict === 'not_found') lines.push('لم نجد مرجعًا مطابقًا في المصادر المتاحة. راجع جهة مؤهلة قبل نسبة النص.');\n  if (['disputed', 'needs_review'].includes(claim.verdict)) lines.push('تحتاج النتيجة إلى مراجعة مختص. تُعرض أحكام المصادر دون ترجيح.');\n  if (claim.verdict === 'verified' && claim.relation === 'same_meaning') lines.push('ثابت بالمعنى، واللفظ المعتمد هو النص الوارد في المصدر.');\n  if (claim.verdict === 'misquoted') lines.push('لا تعتمد على النص المنقول بصيغته الحالية.');\n  const evidence = claim.evidence;\n  if (evidence?.text_arabic) lines.push(`<b>${claim.verdict === 'misquoted' ? 'النص الصحيح' : 'النص العربي من المصدر'}</b>\\n${escapeHtml(evidence.text_arabic)}`);\n  if (evidence?.translation) lines.push(escapeHtml(evidence.translation));\n  for (const grade of evidence?.gradings || []) lines.push([grade.grade_text && `حكم المصدر: ${grade.grade_text}`, grade.mohaddith, grade.book, grade.page != null && `الصفحة / الرقم: ${grade.page}`].filter(Boolean).map(escapeHtml).join('\\n'));\n  for (const location of evidence?.locations || []) lines.push(`السورة: ${escapeHtml(location.surah_name_ar || location.surah)} · الآية: ${escapeHtml(location.ayah)}`);\n  if (evidence?.source) lines.push(`المصدر: ${escapeHtml(({ dorar: 'الدرر السنية', quran: 'النص القرآني المعتمد', hadeethenc: 'موسوعة الأحاديث النبوية' })[evidence.source] || evidence.source)}`);\n  if (evidence?.url) lines.push(sourceLink(evidence.url));\n  if (claim.diff?.details) lines.push(`الفروق: ${escapeHtml(claim.diff.details)}`);\n  for (const op of claim.diff?.ops || []) lines.push([op.quoted && `المنقول: ${escapeHtml(op.quoted)}`, op.source && `الصحيح: ${escapeHtml(op.source)}`].filter(Boolean).join(' ← '));\n  if (claim.alternative) lines.push('<b>بديل صحيح — حديث آخر في المعنى نفسه</b>', escapeHtml(claim.alternative.text_arabic), escapeHtml(claim.alternative.translation || ''), escapeHtml(claim.alternative.attribution || ''), sourceLink(claim.alternative.url, 'مصدر البديل'));\n  return lines.filter(Boolean).join('\\n\\n');\n}\nfunction formatResponse(response, context, loadingMessageId) {\n  const prefix = context.config.demo ? '<b>عرض تجريبي — نتائج ثابتة</b>\\n\\n' : '';\n  const envelope = response?.body !== undefined ? response.body : response;\n  const footer = '\\n\\nأداة آلية للتحقق من المصادر، وليست فتوى.';\n  let blocks = [];\n  try {\n    if (response?.error || response?.statusCode >= 400) blocks = [errorText(response.statusCode)];\n    else if (envelope?.status === 'demo_unsupported' && context.config.demo) blocks = ['هذه نسخة تجريبية. أرسل: اطلبوا العلم ولو بالصين\\nالتحقق من نصوص أخرى يتطلب ربط الـBackend.'];\n    else {\n      if (!envelope || !['ok', 'no_claims', 'evidence_request', 'referral'].includes(envelope.status) || !Array.isArray(envelope.claims)) throw new Error('Invalid response');\n      const titles = { no_claims: 'لم نجد آية أو حديثًا مقتبسًا في النص.', evidence_request: 'مِيزان يتحقق من الأدلة الموجودة، ولا ينشئ أدلة جديدة.', referral: 'هذا السؤال يحتاج إلى جهة مؤهلة للإفتاء.' };\n      if (envelope.status !== 'ok') blocks.push([titles[envelope.status], escapeHtml(envelope.message || ''), escapeHtml(envelope.referral?.text || '')].filter(Boolean).join('\\n\\n'));\n      blocks.push(...envelope.claims.map(claimBlock));\n      if (!blocks.length) throw new Error('Empty result');\n    }\n  } catch { blocks = ['وصلت نتيجة لا يمكن عرضها بأمان. حاول مرة أخرى لاحقًا.']; }\n  const details = envelope?.check_id && context.config.website_url ? sourceLink(`${context.config.website_url.replace(/\\/$/, '')}/result/${encodeURIComponent(envelope.check_id)}`, 'عرض التفاصيل في مِيزان') : '';\n  const chunks = []; let current = '';\n  for (let block of blocks) {\n    // A single oversized card is summarized with links, never cut mid-sentence or mid-HTML entity.\n    if ((prefix + block + footer + '\\n' + details).length > LIMIT) block = 'نتيجة طويلة لا يمكن عرضها كاملة في رسالة واحدة. راجع التفاصيل والمصادر.\\n' + details + '\\n' + (envelope?.claims || []).map(c => sourceLink(c.evidence?.url)).filter(Boolean).join('\\n');\n    if ((prefix + block + footer).length > LIMIT) block = 'نتيجة طويلة لا يمكن عرضها كاملة. افتح صفحة النتيجة في مِيزان.';\n    const next = current ? current + '\\n\\n────────\\n\\n' + block : block;\n    if ((prefix + next + footer).length > LIMIT) { chunks.push(prefix + current + footer); current = block; } else current = next;\n  }\n  if (current) chunks.push(prefix + current + footer);\n  if (details && chunks.length && (chunks[chunks.length - 1] + '\\n' + details).length <= LIMIT) chunks[chunks.length - 1] += '\\n' + details;\n  return chunks.map((text, index) => ({ chat_id: context.chat_id, text, loading_message_id: loadingMessageId, edit: index === 0 && Number.isInteger(loadingMessageId), part: index }));\n}\n\nconst ctx=$('Prepare message').first().json;\nconst loading=$('Send loading').first().json;\nconst id=loading.message_id ?? loading.result?.message_id;\nreturn formatResponse($input.first().json,ctx,id).map(json=>({json}));"
+      },
+      "id": "c7377f6a-4ec2-4016-93f4-6ee2ce7cc174",
+      "name": "Format result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9ebe6355-510f-43e5-90ea-c01aa72d343b",
+              "leftValue": "={{ $json.edit }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d6177990-4cc3-4837-a1c9-fc2440eb5acb",
+      "name": "Edit or send",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        816,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.loading_message_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "a43544c5-3ead-430d-bd4a-4827d2f65b13",
+      "name": "Edit loading",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        80
+      ],
+      "webhookId": "26f9bc51-19d8-4761-9fe3-0781228d3704",
+      "credentials": {
+        "telegramApi": {
+          "id": "noRlITVXTBecURvI",
+          "name": "Telegram account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "if(!$input.first().json.error) return []; return [{json: $('Format result').first().json}];"
+      },
+      "id": "86b1565b-1a49-4c8d-a3e0-68cbf339da7f",
+      "name": "Edit fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "4a67c660-4520-49eb-a155-90708b2e474c",
+      "name": "Send result",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1520,
+        320
+      ],
+      "webhookId": "fe8ea4bc-f836-44cc-a326-0ca54bc0466b",
+      "credentials": {
+        "telegramApi": {
+          "id": "noRlITVXTBecURvI",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare message": {
+      "main": [
+        [
+          {
+            "node": "Needs verification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs verification": {
+      "main": [
+        [
+          {
+            "node": "Send loading",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Service reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send loading": {
+      "main": [
+        [
+          {
+            "node": "Demo mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demo mode": {
+      "main": [
+        [
+          {
+            "node": "Demo result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mizan API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demo result": {
+      "main": [
+        [
+          {
+            "node": "Format result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mizan API": {
+      "main": [
+        [
+          {
+            "node": "Format result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format result": {
+      "main": [
+        [
+          {
+            "node": "Edit or send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit or send": {
+      "main": [
+        [
+          {
+            "node": "Edit loading",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit loading": {
+      "main": [
+        [
+          {
+            "node": "Edit fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit fallback": {
+      "main": [
+        [
+          {
+            "node": "Send result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "9a8fc9ba-70ad-421a-ad0e-dd8e6f5dad8d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1bedb7e01ed753e19d84cef319648c2a091a5af17d7e2a98f01edfa9ed76bcdf"
+  },
+  "id": "ORB0JM6VKGs6kyLv",
+  "tags": []
+}

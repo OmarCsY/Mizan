@@ -1,0 +1,497 @@
+{
+  "name": "Mizan — WhatsApp WAHA",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare message1').first().json.config.waha_url + '/api/sendText' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({session:$('Prepare message1').first().json.session,chatId:$('Prepare message1').first().json.chat_id,text:'⏳ جاري التحقق من المصدر…',linkPreview:false}) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "bc3151b8-355f-4750-a006-62fac1b3d9ca",
+      "name": "Send waiting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        304,
+        528
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MXM1xr4H8pUpMI5g",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare message1').first().json.config.waha_url + '/api/startTyping' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({session:$('Prepare message1').first().json.session,chatId:$('Prepare message1').first().json.chat_id}) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "a412520d-92c8-485c-bfd5-676557234d52",
+      "name": "Start typing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        528,
+        528
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MXM1xr4H8pUpMI5g",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:$('Prepare message1').first().json}];"
+      },
+      "name": "Restore request",
+      "id": "298d2c71-4b23-4183-bcaa-92c2447d8680",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare message1').first().json.config.waha_url + '/api/stopTyping' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({session:$('Prepare message1').first().json.session,chatId:$('Prepare message1').first().json.chat_id}) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "e7f7c59f-59e2-4a4b-a1ce-d8e7cc5e962f",
+      "name": "Stop typing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1648,
+        528
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MXM1xr4H8pUpMI5g",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Format result1').all().map(item=>({json:item.json}));"
+      },
+      "name": "Restore result",
+      "id": "ced7ba9a-0c7d-4615-8007-712512a61283",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transport and presentation only. Verdicts and source data come from Mizan.\nconst LIMIT = 3900;\nfunction escapeHtml(value) {\n  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\n}\nfunction sourceLink(url, label = 'عرض المصدر') {\n  // n8n's Code sandbox does not expose the browser URL constructor.\n  if (typeof url !== 'string' || !/^https:\\/\\/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?::\\d{1,5})?(?:[/?#][^\\s<>\"\\\\]*)?$/i.test(url)) return '';\n  return `<a href=\"${escapeHtml(url)}\">${escapeHtml(label)}</a>`;\n}\nfunction prepareUpdate(update, config) {\n  const message = update?.message;\n  if (!message || message.from?.is_bot || !Number.isSafeInteger(message.chat?.id)) return null;\n  const text = typeof message.text === 'string' ? message.text : typeof message.caption === 'string' ? message.caption : '';\n  const context = { chat_id: String(message.chat.id), message_id: message.message_id, text, config, should_check: false, service_text: '' };\n  const command = text.trim().split(/\\s/)[0].split('@')[0];\n  if (['/start', '/help'].includes(command)) context.service_text = `مرحبًا بك في مِيزان. أرسل نصًا يحتوي على آية أو حديث، أو أعد توجيه رسالة مع وصفها.\\nأداة للتحقق من المصادر، وليست فتوى.${config.demo ? '\\n\\nنسخة تجريبية: جرّب النص: اطلبوا العلم ولو بالصين\\nالنتائج أمثلة ثابتة وليست تحققًا مباشرًا.' : ''}`;\n  else if (!text.trim()) context.service_text = 'أرسل نصًا أو صورة / فيديو مع وصف يحتوي على الاقتباس. لا تدعم هذه النسخة قراءة النص داخل الصور أو التسجيلات الصوتية.';\n  else if (Array.from(text).length > 4000) context.service_text = 'النص طويل. اختصره إلى 4000 حرف ثم أرسله مجددًا.';\n  else if (!config.demo && !/^https:\\/\\//.test(config.backend_url || '')) context.service_text = 'خدمة التحقق لم تُربط بعد. حاول لاحقًا.';\n  else context.should_check = true;\n  return context;\n}\nfunction apiRequest(context) { return { text: context.text, channel: 'telegram', lang_hint: null }; }\nfunction errorText(status) {\n  return ({ 413: 'النص طويل. اختصره إلى 4000 حرف.', 422: 'تعذر قراءة الطلب. حاول إرسال النص مجددًا.', 429: 'وصلت إلى حد الطلبات مؤقتًا. انتظر قليلًا ثم أرسل النص مجددًا.', 503: 'خدمة التحقق غير متاحة الآن. حاول لاحقًا.' })[status] || 'تعذر إكمال التحقق الآن. حاول مرة أخرى بعد قليل.';\n}\nfunction claimBlock(claim) {\n  if (!claim || typeof claim.span !== 'string') throw new Error('Invalid claim');\n  const verdicts = { verified: '✓ موثّق', misquoted: '⚠ منقول بخطأ', not_established: '✕ لا يثبت', disputed: '⚖ اختلف المحدثون', not_found: '? لم يُعثر عليه', needs_review: '? يحتاج مراجعة مختص' };\n  const lines = [`<b>${claim.source_status === 'source_unavailable' ? '! تعذر الوصول للمصدر' : verdicts[claim.verdict] || verdicts.needs_review}</b>`, `«${escapeHtml(claim.span)}»`];\n  if (claim.source_status === 'source_unavailable') lines.push('المصدر لم يستجب. أعد المحاولة؛ هذا لا يعني عدم وجود الاقتباس.');\n  else if (claim.verdict === 'not_found') lines.push('لم نجد مرجعًا مطابقًا في المصادر المتاحة. راجع جهة مؤهلة قبل نسبة النص.');\n  if (['disputed', 'needs_review'].includes(claim.verdict)) lines.push('تحتاج النتيجة إلى مراجعة مختص. تُعرض أحكام المصادر دون ترجيح.');\n  if (claim.verdict === 'verified' && claim.relation === 'same_meaning') lines.push('ثابت بالمعنى، واللفظ المعتمد هو النص الوارد في المصدر.');\n  if (claim.verdict === 'misquoted') lines.push('لا تعتمد على النص المنقول بصيغته الحالية.');\n  const evidence = claim.evidence;\n  if (evidence?.text_arabic) lines.push(`<b>${claim.verdict === 'misquoted' ? 'النص الصحيح' : 'النص العربي من المصدر'}</b>\\n${escapeHtml(evidence.text_arabic)}`);\n  if (evidence?.translation) lines.push(escapeHtml(evidence.translation));\n  for (const grade of evidence?.gradings || []) lines.push([grade.grade_text && `حكم المصدر: ${grade.grade_text}`, grade.mohaddith, grade.book, grade.page != null && `الصفحة / الرقم: ${grade.page}`].filter(Boolean).map(escapeHtml).join('\\n'));\n  for (const location of evidence?.locations || []) lines.push(`السورة: ${escapeHtml(location.surah_name_ar || location.surah)} · الآية: ${escapeHtml(location.ayah)}`);\n  if (evidence?.source) lines.push(`المصدر: ${escapeHtml(({ dorar: 'الدرر السنية', quran: 'النص القرآني المعتمد', hadeethenc: 'موسوعة الأحاديث النبوية' })[evidence.source] || evidence.source)}`);\n  if (evidence?.url) lines.push(sourceLink(evidence.url));\n  if (claim.diff?.details) lines.push(`الفروق: ${escapeHtml(claim.diff.details)}`);\n  for (const op of claim.diff?.ops || []) lines.push([op.quoted && `المنقول: ${escapeHtml(op.quoted)}`, op.source && `الصحيح: ${escapeHtml(op.source)}`].filter(Boolean).join(' ← '));\n  if (claim.alternative) lines.push('<b>بديل صحيح — حديث آخر في المعنى نفسه</b>', escapeHtml(claim.alternative.text_arabic), escapeHtml(claim.alternative.translation || ''), escapeHtml(claim.alternative.attribution || ''), sourceLink(claim.alternative.url, 'مصدر البديل'));\n  return lines.filter(Boolean).join('\\n\\n');\n}\nfunction formatResponse(response, context, loadingMessageId) {\n  const prefix = context.config.demo ? '<b>عرض تجريبي — نتائج ثابتة</b>\\n\\n' : '';\n  const envelope = response?.body !== undefined ? response.body : response;\n  const footer = '\\n\\nأداة آلية للتحقق من المصادر، وليست فتوى.';\n  let blocks = [];\n  try {\n    if (response?.error || response?.statusCode >= 400) blocks = [errorText(response.statusCode)];\n    else if (envelope?.status === 'demo_unsupported' && context.config.demo) blocks = ['هذه نسخة تجريبية. أرسل: اطلبوا العلم ولو بالصين\\nالتحقق من نصوص أخرى يتطلب ربط الـBackend.'];\n    else {\n      if (!envelope || !['ok', 'no_claims', 'evidence_request', 'referral'].includes(envelope.status) || !Array.isArray(envelope.claims)) throw new Error('Invalid response');\n      const titles = { no_claims: 'لم نجد آية أو حديثًا مقتبسًا في النص.', evidence_request: 'مِيزان يتحقق من الأدلة الموجودة، ولا ينشئ أدلة جديدة.', referral: 'هذا السؤال يحتاج إلى جهة مؤهلة للإفتاء.' };\n      if (envelope.status !== 'ok') blocks.push([titles[envelope.status], escapeHtml(envelope.message || ''), escapeHtml(envelope.referral?.text || '')].filter(Boolean).join('\\n\\n'));\n      blocks.push(...envelope.claims.map(claimBlock));\n      if (!blocks.length) throw new Error('Empty result');\n    }\n  } catch { blocks = ['وصلت نتيجة لا يمكن عرضها بأمان. حاول مرة أخرى لاحقًا.']; }\n  const details = envelope?.check_id && context.config.website_url ? sourceLink(`${context.config.website_url.replace(/\\/$/, '')}/result/${encodeURIComponent(envelope.check_id)}`, 'عرض التفاصيل في مِيزان') : '';\n  const chunks = []; let current = '';\n  for (let block of blocks) {\n    // A single oversized card is summarized with links, never cut mid-sentence or mid-HTML entity.\n    if ((prefix + block + footer + '\\n' + details).length > LIMIT) block = 'نتيجة طويلة لا يمكن عرضها كاملة في رسالة واحدة. راجع التفاصيل والمصادر.\\n' + details + '\\n' + (envelope?.claims || []).map(c => sourceLink(c.evidence?.url)).filter(Boolean).join('\\n');\n    if ((prefix + block + footer).length > LIMIT) block = 'نتيجة طويلة لا يمكن عرضها كاملة. افتح صفحة النتيجة في مِيزان.';\n    const next = current ? current + '\\n\\n────────\\n\\n' + block : block;\n    if ((prefix + next + footer).length > LIMIT) { chunks.push(prefix + current + footer); current = block; } else current = next;\n  }\n  if (current) chunks.push(prefix + current + footer);\n  if (details && chunks.length && (chunks[chunks.length - 1] + '\\n' + details).length <= LIMIT) chunks[chunks.length - 1] += '\\n' + details;\n  return chunks.map((text, index) => ({ chat_id: context.chat_id, text, loading_message_id: loadingMessageId, edit: index === 0 && Number.isInteger(loadingMessageId), part: index }));\n}\n\n\n// WAHA transport only. No verification, AI calls, or source retrieval here.\nfunction prepareWahaUpdate(input, config) {\n  const event = input?.body ?? input;\n  const message = event?.payload;\n  if (event?.event !== 'message' || event.session !== config.session || message?.fromMe !== false) return null;\n  if (typeof message.id !== 'string' || !message.id || !/^\\d+@(c\\.us|lid)$/.test(message.from || '')) return null;\n  const context = prepareUpdate({message:{chat:{id:1},text:typeof message.body === 'string' ? message.body : ''}}, config);\n  return {...context, chat_id:message.from, message_id:message.id, session:event.session};\n}\n\nfunction whatsappText(html) {\n  // Convert our generated HTML BEFORE decoding escaped user/source content.\n  return html.replace(/<a href=\"([^\"]+)\">([^<]*)<\\/a>/g, '$2\\n$1')\n    .replace(/<\\/?b>/g, '')\n    .replace(/&quot;/g, '\"').replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&amp;/g, '&');\n}\n\nfunction formatWahaResponse(response, context) {\n  return formatResponse(response, context).map(item => ({\n    session:context.session, chatId:context.chat_id, text:whatsappText(item.text),\n    linkPreview:false, part:item.part,\n  }));\n}\n\nreturn formatWahaResponse($input.first().json,$('Prepare message1').first().json).map(json=>({json}));"
+      },
+      "id": "6c65815d-1d3d-4ec1-ba4c-5b7786f9e699",
+      "name": "Format result1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1424,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare message1').first().json.config.backend_url.replace(/\\/$/, '') + '/api/v1/check' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({text: $('Prepare message1').first().json.text,channel:'api',lang_hint:null}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "d901d35c-cb3b-4411-bb68-b308ec8cdbdc",
+      "name": "Mizan API1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        624
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const fixtures = {\"dorar\":{\"text_arabic\":\"اطلُبُوا العِلْمَ ولو بالصِّينِ\",\"source\":\"dorar\",\"url\":\"https://dorar.net/h/Yx6dE0Zf\",\"gradings\":[{\"mohaddith\":\"الألباني\",\"book\":\"السلسلة الضعيفة\",\"page\":\"416\",\"grade_text\":\"باطل\",\"grade_class\":\"very_weak\"}],\"provenance\":\"Source page retrieved for frontend fixture authoring, 2026-10-05. Demo verdict is a fixed API fixture, not a frontend authenticity decision.\"},\"hadith-ar\":{\"id\":\"6267\",\"title\":\"من سلك طريقًا يبتغي فيه علمًا سهل الله له طريقًا إلى الجنة\",\"attribution\":\"رواه أبو داود والترمذي وابن ماجه والدارمي وأحمد\",\"grade\":\"حسن\",\"url\":\"https://hadeethenc.com/ar/browse/hadith/6267\",\"fetched_from\":\"https://hadeethenc.com/api/v1/hadeeths/one/?language=ar&id=6267\",\"fetched_at\":\"2026-10-05T18:50:36.395Z\"},\"hadith-en\":{\"id\":\"6267\",\"title\":\"Whoever follows a path in pursuit of knowledge, Allah will facilitate for him a path to Paradise\",\"attribution\":\"Narrated by Ibn Majah - Narrated by At-Termedhy - Narrated by Abu Daoud - Narrated by Ahmad - Ad-Daarimi\",\"grade\":\"Good hadith\",\"url\":\"https://hadeethenc.com/en/browse/hadith/6267\",\"fetched_from\":\"https://hadeethenc.com/api/v1/hadeeths/one/?language=en&id=6267\",\"fetched_at\":\"2026-10-05T18:50:36.644Z\"},\"hadith-ur\":{\"id\":\"6267\",\"title\":\"جو شخص علم کی تلاش میں کسی راہ پر چل پڑے، اللہ تعالیٰ اس کے لیے جنت کی راہ آسان فرما دیتا ہے\",\"attribution\":\"اسے ابنِ ماجہ نے روایت کیا ہے۔ - اسے امام ترمذی نے روایت کیا ہے۔ - اسے امام ابو داؤد نے روایت کیا ہے۔ - اسے امام احمد نے روایت کیا ہے۔ - اسے امام دارمی نے روایت کیا ہے۔\",\"grade\":\"حَسَنْ\",\"url\":\"https://hadeethenc.com/ur/browse/hadith/6267\",\"fetched_from\":\"https://hadeethenc.com/api/v1/hadeeths/one/?language=ur&id=6267\",\"fetched_at\":\"2026-10-05T18:50:36.896Z\"},\"quran\":{\"id\":\"6095\",\"sura\":\"94\",\"aya\":\"5\",\"arabic_text\":\"فَإِنَّ مَعَ ٱلۡعُسۡرِ يُسۡرًا\",\"translation\":\"For indeed, with hardship [will be] ease [i.e., relief].\",\"footnotes\":\"\",\"url\":\"https://quranenc.com/en/browse/english_saheeh/94#5\",\"fetched_from\":\"https://quranenc.com/api/v1/translation/aya/english_saheeh/94/5\",\"fetched_at\":\"2026-10-05T18:50:37.711Z\"}};\nconst ctx = $('Prepare message1').first().json;\nconst text = ctx.text.trim();\nlet result = {status:'demo_unsupported'};\nconst ar=fixtures['hadith-ar'];\nif (['اطلبوا العلم ولو بالصين','قال رسول الله ﷺ: اطلبوا العلم ولو بالصين', fixtures.dorar.text_arabic].includes(text)) result={check_id:'demo-china',status:'ok',claims:[{index:0,type:'hadith',span:text,verdict:'not_established',source_status:'ok',evidence:fixtures.dorar,alternative:{source:'hadeethenc',text_arabic:ar.title,attribution:ar.attribution,url:ar.url}}]};\nfor(const lang of ['ar','en','ur']) if(text===fixtures['hadith-'+lang].title) result={check_id:'demo-'+lang,status:'ok',claims:[{index:0,type:'hadith',span:text,verdict:'verified',relation:'same_meaning',source_status:'ok',evidence:{source:'hadeethenc',text_arabic:ar.title,translation:lang==='ar'?null:text,url:fixtures['hadith-'+lang].url,gradings:[{grade_text:ar.grade}]}}]};\nif(text===fixtures.quran.arabic_text) result={check_id:'demo-quran',status:'ok',claims:[{index:0,type:'quran',span:text,verdict:'verified',source_status:'ok',evidence:{source:'quran',text_arabic:text,url:fixtures.quran.url,locations:[{surah:94,ayah:5}]}}]};\nreturn [{json:result}];"
+      },
+      "id": "1581995e-7c28-4e24-9560-b6ca762bde36",
+      "name": "Demo result1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "29fea47c-227d-4fe8-9372-831e1611f2cd",
+              "leftValue": "={{ $('Prepare message1').first().json.config.demo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "40794d9e-69a0-4adc-87bd-6b18a95aaf17",
+      "name": "Demo mode1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        976,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fb7defc0-44ad-4d10-85b6-4ca0cd789cf0",
+              "leftValue": "={{ $json.should_check }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "af189683-3263-4f1b-a60e-b810760b66a5",
+      "name": "Needs verification1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// WhatsApp transport: accept private texts and real group mentions only.\nconst config={demo:false,backend_url:'https://mizan-backend-d4t5.onrender.com',website_url:'',waha_url:'https://automations-waha.gkrgfu.easypanel.host',session:'MyD3bsa'};\nconst event=$input.first().json.body ?? $input.first().json;\nconst message=event?.payload;\nif(event?.event!=='message'||event.session!==config.session||message?.fromMe!==false) return [];\nif(typeof message.id!=='string'||!message.id) return [];\nconst group=/^[0-9]+(?:-[0-9]+)?@g[.]us$/.test(message.from||'');\nif(!group&&!/^[0-9]+@(c[.]us|lid)$/.test(message.from||'')) return [];\nlet text=typeof message.body==='string'?message.body:'';\nif(group){\n  const ownIds=[event.me?.id,event.me?.lid].filter(id=>typeof id==='string'&&/^[0-9]+@(c[.]us|lid)$/.test(id));\n  const mentions=message._data?.mentionedJidList;\n  if(!Array.isArray(mentions)||!mentions.some(id=>ownIds.includes(id))) return [];\n  text=text.replace(/@([0-9]+)(?![0-9])/g,(token,id)=>ownIds.some(own=>own.split('@')[0]===id)?'':token).trim();\n}\nconst ctx={chat_id:message.from,message_id:message.id,session:event.session,text,config,should_check:false,service_text:''};\nconst command=text.trim().split(/\\s/)[0].split('@')[0];\nif(['/start','/help'].includes(command)) ctx.service_text='مرحبًا بك في ميزان. أرسل نصًا يحتوي على آية أو حديث للتحقق من مصادره. أداة آلية وليست فتوى.';\nelse if(!text.trim()) ctx.service_text='أرسل نصًا أو صورة / فيديو مع وصف يحتوي على الاقتباس. لا تدعم هذه النسخة قراءة النص داخل الصور أو التسجيلات الصوتية.';\nelse if(Array.from(text).length>4000) ctx.service_text='النص طويل. اختصره إلى 4000 حرف ثم أرسله مجددًا.';\nelse ctx.should_check=true;\nreturn [{json:ctx}];"
+      },
+      "id": "a67bf30f-d43f-4138-b498-cda02c8da3a4",
+      "name": "Prepare message1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare message1').first().json.config.waha_url + '/api/sendText' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({session:$json.session,chatId:$json.chatId,text:$json.text,linkPreview:false}) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "20736756-6c9a-4eeb-9ff9-111f7c5ca50c",
+      "name": "Send WhatsApp result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2096,
+        528
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MXM1xr4H8pUpMI5g",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare message1').first().json.config.waha_url + '/api/sendText' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({session:$json.session,chatId:$json.chat_id,text:$json.service_text,linkPreview:false}) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "28b174aa-a28b-42ed-a5af-960f9679d09e",
+      "name": "Service reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        304,
+        336
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MXM1xr4H8pUpMI5g",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mizan-whatsapp",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "b01687d2-5a23-435b-96f1-6fe7f86b1090",
+      "name": "WAHA Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        432
+      ],
+      "webhookId": "4dda35e4-4b27-4f41-9659-015445b6c874",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "z9MyxerDvgIZs5gX",
+          "name": "Header Auth account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Send waiting": {
+      "main": [
+        [
+          {
+            "node": "Start typing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start typing": {
+      "main": [
+        [
+          {
+            "node": "Restore request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stop typing": {
+      "main": [
+        [
+          {
+            "node": "Restore result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mizan API1": {
+      "main": [
+        [
+          {
+            "node": "Format result1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demo result1": {
+      "main": [
+        [
+          {
+            "node": "Format result1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demo mode1": {
+      "main": [
+        [
+          {
+            "node": "Demo result1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mizan API1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs verification1": {
+      "main": [
+        [
+          {
+            "node": "Send waiting",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Service reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare message1": {
+      "main": [
+        [
+          {
+            "node": "Needs verification1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format result1": {
+      "main": [
+        [
+          {
+            "node": "Stop typing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WAHA Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore request": {
+      "main": [
+        [
+          {
+            "node": "Demo mode1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore result": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 120
+  },
+  "versionId": "9cde089f-1502-4f66-9c73-8c95acde759b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1bedb7e01ed753e19d84cef319648c2a091a5af17d7e2a98f01edfa9ed76bcdf"
+  },
+  "id": "vKpJp914CmPPWFC6",
+  "tags": []
+}
